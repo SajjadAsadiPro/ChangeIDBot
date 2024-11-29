@@ -93,25 +93,6 @@ bot.on("callback_query", (query) => {
   }
 });
 
-// پردازش پیام‌های متنی
-bot.on("message", (msg) => {
-  const chatId = msg.chat.id;
-
-  if (msg.text && msg.text !== "/start") {
-    // بررسی اینکه آیدی مبدا در متن وجود دارد
-    let messageText = msg.text;
-    if (userMappings[chatId]) {
-      const { source_id, dest_id } = userMappings[chatId];
-      if (messageText.includes(source_id)) {
-        messageText = messageText.replace(source_id, dest_id);
-      }
-
-      // ارسال پیام تغییر یافته به کانال مقصد
-      bot.sendMessage(chatId, messageText);
-    }
-  }
-});
-
 // پردازش تصاویر
 bot.on("photo", (msg) => {
   const chatId = msg.chat.id;
@@ -124,8 +105,21 @@ bot.on("photo", (msg) => {
     }
   }
 
-  // ارسال تصویر با کپشن تغییر یافته
-  bot.sendPhoto(chatId, msg.photo[0].file_id, { caption });
+  // ذخیره تصویر در صف
+  if (!global.fileQueue) {
+    global.fileQueue = [];
+  }
+  global.fileQueue.push({
+    type: "photo",
+    file_id: msg.photo[0].file_id,
+    caption,
+    chatId,
+  });
+
+  // ارسال تصاویر از صف بعد از 1 ثانیه
+  setTimeout(() => {
+    sendFilesInOrder(chatId);
+  }, 1000);
 });
 
 // پردازش ویدیو
@@ -140,6 +134,40 @@ bot.on("video", (msg) => {
     }
   }
 
-  // ارسال ویدیو با کپشن تغییر یافته
-  bot.sendVideo(chatId, msg.video.file_id, { caption });
+  // ذخیره ویدیو در صف
+  if (!global.fileQueue) {
+    global.fileQueue = [];
+  }
+  global.fileQueue.push({
+    type: "video",
+    file_id: msg.video.file_id,
+    caption,
+    chatId,
+  });
+
+  // ارسال ویدیوها از صف بعد از 1 ثانیه
+  setTimeout(() => {
+    sendFilesInOrder(chatId);
+  }, 1000);
 });
+
+// تابع برای ارسال فایل‌ها در همان ترتیب
+function sendFilesInOrder(chatId) {
+  if (!global.fileQueue || global.fileQueue.length === 0) return;
+
+  // ارسال فایل‌ها به ترتیب
+  const file = global.fileQueue.shift(); // دریافت اولین فایل از صف
+
+  if (file.type === "photo") {
+    bot.sendPhoto(file.chatId, file.file_id, { caption: file.caption });
+  } else if (file.type === "video") {
+    bot.sendVideo(file.chatId, file.file_id, { caption: file.caption });
+  }
+
+  // پس از ارسال یک فایل، دوباره برای ارسال بعدی اقدام می‌کنیم
+  if (global.fileQueue.length > 0) {
+    setTimeout(() => {
+      sendFilesInOrder(chatId);
+    }, 1000);
+  }
+}
