@@ -104,13 +104,11 @@ bot.on('photo', (msg) => {
   const chatId = msg.chat.id;
   let caption = msg.caption || '';
 
-  // بررسی برای وجود "➰ لینک دانلود" و "کلیک کنید"
-  if (caption.includes("➰ لینک دانلود") && caption.includes("کلیک کنید")) {
-    // حذف متن بین "➰ لینک دانلود" و "کلیک کنید"
-    caption = caption.replace(/➰ لینک دانلود.*?کلیک کنید/g, '');
-    // تغییر t.me/towfilm به @GlobCinema
-    caption = caption.replace("🆔 t.me/towfilm", "🆔 t.me/GlobCinema");
-  }
+  // حذف متن بین ➰ لینک دانلود: و 📺لیست سریال ها (کلیک کنید)
+  caption = caption.replace(/➰ لینک دانلود:.*📺لیست سریال ها \(کلیک کنید\)/, "فیلم و سریال روز خارجی");
+
+  // جایگزینی "🆔 t.me/towfilm" با "🆔 t.me/GlobCinema"
+  caption = caption.replace("🆔 t.me/towfilm", "🆔 t.me/GlobCinema");
 
   // ارسال تصویر با کپشن تغییر یافته
   bot.sendPhoto(chatId, msg.photo[0].file_id, { caption });
