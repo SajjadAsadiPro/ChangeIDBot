@@ -82,12 +82,20 @@ bot.on("photo", (msg) => {
       if (!fileQueue[episodeNumber]) {
         fileQueue[episodeNumber] = [];
       }
-      fileQueue[episodeNumber].push({
-        type: "photo",
-        file_id: msg.photo[0].file_id,
-        caption,
-        chatId,
-      });
+
+      // اطمینان حاصل می‌کنیم که فایل تکراری نباشد
+      if (
+        !fileQueue[episodeNumber].some(
+          (file) => file.file_id === msg.photo[0].file_id
+        )
+      ) {
+        fileQueue[episodeNumber].push({
+          type: "photo",
+          file_id: msg.photo[0].file_id,
+          caption,
+          chatId,
+        });
+      }
     }
   } else {
     // اگر شماره قسمت وجود ندارد، فقط آیدی مبدا را تغییر بده
@@ -113,19 +121,27 @@ bot.on("video", (msg) => {
   // بررسی شماره قسمت در کپشن
   if (caption && caption.includes("قسمت")) {
     const match = caption.match(/قسمت\s*(\d+)/);
-    const episodeNumber = match ? parseInt(match[1]) : null;
+    const episodeNumber = match ? parseInt(match[1]) / 10 : null;
 
     if (episodeNumber !== null) {
       // ذخیره ویدیو در صف به تفکیک شماره قسمت
       if (!fileQueue[episodeNumber]) {
         fileQueue[episodeNumber] = [];
       }
-      fileQueue[episodeNumber].push({
-        type: "video",
-        file_id: msg.video.file_id,
-        caption,
-        chatId,
-      });
+
+      // اطمینان حاصل می‌کنیم که فایل تکراری نباشد
+      if (
+        !fileQueue[episodeNumber].some(
+          (file) => file.file_id === msg.video.file_id
+        )
+      ) {
+        fileQueue[episodeNumber].push({
+          type: "video",
+          file_id: msg.video.file_id,
+          caption,
+          chatId,
+        });
+      }
     }
   } else {
     // اگر شماره قسمت وجود ندارد، فقط آیدی مبدا را تغییر بده
