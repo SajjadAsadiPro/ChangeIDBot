@@ -6,11 +6,11 @@ const bot = new TelegramBot(token, { polling: true });
 
 // دکمه‌ها و آیدی‌های مبدا و مقصد
 const mappings = {
-  "مستر مووی": {
+  "ایرانی": {
     source_id: "@MrMoovie",
     dest_id: "@FILmoseriyalerooz_bot"
   },
-  "اخبار فیلم و سریال روز": {
+  "خارجی": {
     source_id: "@towfilm",
     dest_id: "@GlobCinema"
   }
@@ -26,12 +26,11 @@ bot.onText(/\/start/, (msg) => {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: "مستر مووی", callback_data: "مستر مووی" },
-          { text: "اخبار فیلم و سریال روز", callback_data: "اخبار فیلم و سریال روز" }
+          { text: "ایرانی", callback_data: "ایرانی" },
+          { text: "خارجی", callback_data: "خارجی" }
         ],
         [
-          { text: "انتخاب آیدی‌ها", callback_data: "انتخاب آیدی‌ها" },
-          { text: "تغییر کاور", callback_data: "change_cover" }
+          { text: "انتخاب آیدی‌ها", callback_data: "انتخاب آیدی‌ها" }
         ]
       ]
     }
@@ -59,7 +58,7 @@ bot.on('callback_query', (query) => {
   const chatId = query.message.chat.id;
   const selectedOption = query.data;
 
-  // اگر انتخاب شده دکمه "مستر مووی" یا "اخبار فیلم و سریال روز" باشد
+  // اگر انتخاب شده دکمه "ایرانی" یا "خارجی" باشد
   if (mappings[selectedOption]) {
     const { source_id, dest_id } = mappings[selectedOption];
     
@@ -91,33 +90,6 @@ bot.on('callback_query', (query) => {
         bot.sendMessage(chatId, "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد.");
       });
     });
-  }
-
-  // اگر کاربر "تغییر کاور" را انتخاب کند
-  if (selectedOption === "change_cover") {
-    bot.sendMessage(chatId, "لطفاً تصویر کاور را ارسال کنید تا تغییرات لازم اعمال شود.");
-  }
-});
-
-// پردازش تغییر کاور
-bot.on('photo', (msg) => {
-  const chatId = msg.chat.id;
-  let caption = msg.caption || '';
-
-  // حذف متن بین ➰ لینک دانلود: و 📺لیست سریال ها (کلیک کنید)
-  caption = caption.replace(/➰ لینک دانلود:.*📺لیست سریال ها \(کلیک کنید\)/, "فیلم و سریال روز خارجی");
-
-  // جایگزینی "🆔 t.me/towfilm" با "🆔 t.me/GlobCinema"
-  caption = caption.replace("🆔 t.me/towfilm", "🆔 t.me/GlobCinema");
-
-  // ارسال تصویر با کپشن تغییر یافته
-  bot.sendPhoto(chatId, msg.photo[0].file_id, { caption });
-
-  // ارسال تصویر به کانال مقصد
-  if (userMappings[chatId]) {
-    const { source_id, dest_id } = userMappings[chatId];
-    // ارسال به کانال مقصد
-    bot.sendPhoto('@Sajjjad_asadi', msg.photo[0].file_id, { caption });
   }
 });
 
