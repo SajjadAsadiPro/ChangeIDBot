@@ -1,74 +1,70 @@
 const TelegramBot = require('node-telegram-bot-api');
 
-// توکن ربات خود را اینجا وارد کنید
+// توکن ربات تلگرام
 const token = '7300821157:AAFpqNZQqznNqf74O-gVDDhQHCdgzv4X8pY';
 const bot = new TelegramBot(token, { polling: true });
 
-// آیدی ربات مقصد (عدد)
-const destinationBotId = 1664164433;  // آیدی ربات مقصد
+// ذخیره اطلاعات آیدی‌ها
+let sourceId = '';
+let destId = '';
 
-// آیدی خودتان برای ارسال پیام‌های خطا
-const myId = '7556830926';
-
-// ارسال پیام استارت
+// وقتی /start وارد می‌شود
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'سلام! ربات در حال آماده‌سازی است.');
+  bot.sendMessage(chatId, 'سلام! لطفاً آیدی مبدا را وارد کنید (آیدی که می‌خواهید تغییر دهد):');
 });
 
-// تابعی برای تغییر کپشن
-function modifyCaption(text) {
-  // تغییر @MrMoovie به @filmoseriyalerooz_bot
-  return text.replace(/📽@MrMoovie/g, '@filmoseriyalerooz_bot').replace(/@\w+/g, '@day'); // تغییر @user به @day
-}
-
-// ارسال انواع پیام‌ها
-bot.on('message', (msg) => {
+// وقتی آیدی مبدا وارد می‌شود
+bot.onText(/^(.*)$/, (msg, match) => {
   const chatId = msg.chat.id;
 
-  // اگر پیام دارای ویدیو بود
-  if (msg.video) {
-    let caption = msg.caption || '';  // کپشن ویدیو را دریافت می‌کنیم
-
-    // تغییر کپشن
-    caption = modifyCaption(caption);
-
-    // ارسال ویدیو به ربات مقصد همراه با کپشن تغییر یافته
-    bot.sendVideo(destinationBotId, msg.video.file_id, { caption: caption })
-      .catch(error => {
-        bot.sendMessage(myId, `خطا در ارسال ویدیو به ربات مقصد: ${error.message}`);
-      });
+  // ذخیره آیدی مبدا
+  if (!sourceId) {
+    sourceId = match[1];
+    bot.sendMessage(chatId, `آیدی مبدا با موفقیت ذخیره شد: ${sourceId}\nحالا لطفاً آیدی مقصد (آیدی جدید) را وارد کنید:`);
   }
-  // اگر پیام دارای تصویر بود
-  else if (msg.photo) {
-    let caption = msg.caption || '';  // کپشن تصویر را دریافت می‌کنیم
-
-    // تغییر کپشن
-    caption = modifyCaption(caption);
-
-    // ارسال تصویر به ربات مقصد همراه با کپشن تغییر یافته
-    bot.sendPhoto(destinationBotId, msg.photo[msg.photo.length - 1].file_id, { caption: caption })
-      .catch(error => {
-        bot.sendMessage(myId, `خطا در ارسال تصویر به ربات مقصد: ${error.message}`);
-      });
+  // ذخیره آیدی مقصد
+  else if (!destId) {
+    destId = match[1];
+    bot.sendMessage(chatId, `آیدی مقصد با موفقیت ذخیره شد: ${destId}\nحالا هر پیام که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد.`);
   }
-  // اگر پیام دارای متن بود
-  else if (msg.text) {
+  // تغییر آیدی در پیام‌ها
+  else {
     let text = msg.text;
 
-    // تغییر متن
-    text = modifyCaption(text);
-
-    // بررسی اینکه متن پیام خالی نباشد
-    if (text.trim() === '') {
-      bot.sendMessage(myId, 'پیام ارسالی خالی است و به ربات مقصد ارسال نشد.');
-      return;
+    // اگر متن پیام شامل آیدی مبدا باشد، آن را تغییر می‌دهیم
+    if (text.includes(sourceId)) {
+      text = text.replace(new RegExp(sourceId, 'g'), destId);
     }
 
-    // ارسال پیام به ربات مقصد
-    bot.sendMessage(destinationBotId, text)
-      .catch(error => {
-        bot.sendMessage(myId, `خطا در ارسال پیام به ربات مقصد: ${error.message}`);
-      });
+    // ارسال پیام به کانال مقصد
+    bot.sendMessage(chatId, `متن تغییر یافته: ${text}`);
+    // ارسال به کانال مقصد (در اینجا آیدی کانال باید وارد شود)
+    bot.sendMessage('@DEST_CHANNEL', text);
   }
+});
+
+// پردازش تصاویر و ویدیوها
+bot.on('photo', (msg) => {
+  const chatId = msg.chat.id;
+  let caption = msg.caption || '';
+
+  if (caption.includes(sourceId)) {
+    caption = caption.replace(new RegExp(sourceId, 'g'), destId);
+  }
+
+  bot.sendPhoto(chatId, msg.photo[msg.photo.length - 1].file_id, { caption: caption });
+  bot.sendPhoto('@DEST_CHANNEL', msg.photo[msg.photo.length - 1].file_id, { caption: caption });
+});
+
+bot.on('video', (msg) => {
+  const chatId = msg.chat.id;
+  let caption = msg.caption || '';
+
+  if (caption.includes(sourceId)) {
+    caption = caption.replace(new RegExp(sourceId, 'g'), destId);
+  }
+
+  bot.sendVideo(chatId, msg.video.file_id, { caption: caption });
+  bot.sendVideo('@DEST_CHANNEL', msg.video.file_id, { caption: caption });
 });
