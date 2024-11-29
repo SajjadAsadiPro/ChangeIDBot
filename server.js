@@ -19,6 +19,9 @@ const mappings = {
 // ذخیره آیدی‌ها برای کاربران
 const userMappings = {};
 
+// ذخیره صف فایل‌ها
+const fileQueue = []; // صف برای ذخیره فایل‌ها
+
 // فرمان /start
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
@@ -34,17 +37,7 @@ bot.onText(/\/start/, (msg) => {
     },
   };
 
-  // دکمه غیر شیشه‌ای برای شروع (اضافه کردن به گزینه‌های منو)
-  const startOptions = {
-    reply_markup: {
-      keyboard: [[{ text: "/start" }]],
-      resize_keyboard: true, // برای تنظیم اندازه دکمه‌ها
-      one_time_keyboard: true, // دکمه فقط یکبار ظاهر شود
-    },
-  };
-
   bot.sendMessage(chatId, "سلام! لطفاً یک گزینه انتخاب کنید:", options);
-  bot.sendMessage(chatId, "برای شروع دوباره /start را بزنید:", startOptions);
 });
 
 // هندلر برای انتخاب دکمه
@@ -52,7 +45,6 @@ bot.on("callback_query", (query) => {
   const chatId = query.message.chat.id;
   const selectedOption = query.data;
 
-  // اگر انتخاب شده دکمه "ایرانی" یا "خارجی" باشد
   if (mappings[selectedOption]) {
     const { source_id, dest_id } = mappings[selectedOption];
 
@@ -61,35 +53,10 @@ bot.on("callback_query", (query) => {
 
     bot.sendMessage(chatId, `آیدی مبدا: ${source_id} با موفقیت ذخیره شد.`);
     bot.sendMessage(chatId, `آیدی مقصد: ${dest_id} با موفقیت ذخیره شد.`);
-
-    // تایید و آماده‌سازی برای تغییرات در پیام‌ها
     bot.sendMessage(
       chatId,
       "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد."
     );
-  }
-
-  // اگر کاربر "انتخاب آیدی‌ها" را انتخاب کند
-  if (selectedOption === "انتخاب آیدی‌ها") {
-    bot.sendMessage(chatId, "لطفاً آیدی مبدا را وارد کنید:");
-    bot.once("message", (msg) => {
-      const source_id = msg.text;
-      bot.sendMessage(chatId, "حالا لطفاً آیدی مقصد را وارد کنید:");
-
-      bot.once("message", (msg) => {
-        const dest_id = msg.text;
-
-        // ذخیره آیدی‌ها برای کاربر
-        userMappings[chatId] = { source_id, dest_id };
-
-        bot.sendMessage(chatId, `آیدی مبدا: ${source_id} با موفقیت ذخیره شد.`);
-        bot.sendMessage(chatId, `آیدی مقصد: ${dest_id} با موفقیت ذخیره شد.`);
-        bot.sendMessage(
-          chatId,
-          "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد."
-        );
-      });
-    });
   }
 });
 
@@ -105,21 +72,16 @@ bot.on("photo", (msg) => {
     }
   }
 
-  // ذخیره تصویر در صف
-  if (!global.fileQueue) {
-    global.fileQueue = [];
-  }
-  global.fileQueue.push({
+  // ذخیره عکس در صف
+  fileQueue.push({
     type: "photo",
     file_id: msg.photo[0].file_id,
     caption,
     chatId,
   });
 
-  // ارسال تصاویر از صف بعد از 1 ثانیه
-  setTimeout(() => {
-    sendFilesInOrder(chatId);
-  }, 1000);
+  // فراخوانی تابع برای ارسال فایل‌ها از صف
+  processQueue(); // شروع فرآیند ارسال
 });
 
 // پردازش ویدیو
@@ -135,39 +97,48 @@ bot.on("video", (msg) => {
   }
 
   // ذخیره ویدیو در صف
-  if (!global.fileQueue) {
-    global.fileQueue = [];
-  }
-  global.fileQueue.push({
+  fileQueue.push({
     type: "video",
     file_id: msg.video.file_id,
     caption,
     chatId,
   });
 
-  // ارسال ویدیوها از صف بعد از 1 ثانیه
-  setTimeout(() => {
-    sendFilesInOrder(chatId);
-  }, 1000);
+  // فراخوانی تابع برای ارسال فایل‌ها از صف
+  processQueue(); // شروع فرآیند ارسال
 });
 
-// تابع برای ارسال فایل‌ها در همان ترتیب
-function sendFilesInOrder(chatId) {
-  if (!global.fileQueue || global.fileQueue.length === 0) return;
+// تابع پردازش صف فایل‌ها
+function processQueue() {
+  if (fileQueue.length === 0) return; // اگر صف خالی است، هیچ کاری انجام نده
 
-  // ارسال فایل‌ها به ترتیب
-  const file = global.fileQueue.shift(); // دریافت اولین فایل از صف
+  const file = fileQueue.shift(); // دریافت اولین فایل از صف
 
+  // اگر فایل عکس است، آن را ارسال می‌کنیم
   if (file.type === "photo") {
-    bot.sendPhoto(file.chatId, file.file_id, { caption: file.caption });
-  } else if (file.type === "video") {
-    bot.sendVideo(file.chatId, file.file_id, { caption: file.caption });
+    bot
+      .sendPhoto(file.chatId, file.file_id, { caption: file.caption })
+      .then(() => {
+        // پس از ارسال عکس، فایل بعدی را ارسال می‌کنیم
+        processQueue();
+      })
+      .catch((err) => {
+        console.error("Error sending photo:", err);
+        processQueue(); // در صورت خطا هم ادامه می‌دهیم
+      });
   }
 
-  // پس از ارسال یک فایل، دوباره برای ارسال بعدی اقدام می‌کنیم
-  if (global.fileQueue.length > 0) {
-    setTimeout(() => {
-      sendFilesInOrder(chatId);
-    }, 1000);
+  // اگر فایل ویدیو است، آن را ارسال می‌کنیم
+  else if (file.type === "video") {
+    bot
+      .sendVideo(file.chatId, file.file_id, { caption: file.caption })
+      .then(() => {
+        // پس از ارسال ویدیو، فایل بعدی را ارسال می‌کنیم
+        processQueue();
+      })
+      .catch((err) => {
+        console.error("Error sending video:", err);
+        processQueue(); // در صورت خطا هم ادامه می‌دهیم
+      });
   }
 }
