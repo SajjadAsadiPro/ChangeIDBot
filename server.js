@@ -1,26 +1,49 @@
-const TelegramBot = require("node-telegram-bot-api");
+const TelegramBot = require('node-telegram-bot-api');
 
 // توکن ربات تلگرام
-const token = "7300821157:AAFpqNZQqznNqf74O-gVDDhQHCdgzv4X8pY";
+const token = '7300821157:AAFpqNZQqznNqf74O-gVDDhQHCdgzv4X8pY';
 const bot = new TelegramBot(token, { polling: true });
 
 // دکمه‌ها و آیدی‌های مبدا و مقصد
 const mappings = {
-  ایرانی: {
+  "ایرانی": {
     source_id: "@MrMoovie",
-    dest_id: "@FILmoseriyalerooz_bot",
+    dest_id: "@FILmoseriyalerooz_bot"
   },
-  خارجی: {
+  "خارجی": {
     source_id: "@towfilm",
-    dest_id: "@GlobCinema",
-  },
+    dest_id: "@GlobCinema"
+  }
 };
 
 // ذخیره آیدی‌ها برای کاربران
 const userMappings = {};
 
-// ذخیره پیام‌ها
-const pendingMessages = {};
+// صف ارسال پیام
+const messageQueue = [];
+let isProcessing = false;
+
+// افزودن پیام به صف
+const addToQueue = (task) => {
+  messageQueue.push(task);
+  processQueue();
+};
+
+// پردازش صف
+const processQueue = async () => {
+  if (isProcessing || messageQueue.length === 0) return;
+  isProcessing = true;
+
+  const task = messageQueue.shift();
+  try {
+    await task(); // اجرای پیام
+  } catch (error) {
+    console.error("خطا در پردازش صف:", error);
+  }
+
+  isProcessing = false;
+  processQueue(); // ادامه پردازش پیام‌های بعدی
+};
 
 // فرمان /start
 bot.onText(/\/start/, (msg) => {
@@ -30,90 +53,77 @@ bot.onText(/\/start/, (msg) => {
       inline_keyboard: [
         [
           { text: "ایرانی", callback_data: "ایرانی" },
-          { text: "خارجی", callback_data: "خارجی" },
+          { text: "خارجی", callback_data: "خارجی" }
         ],
-        [{ text: "انتخاب آیدی‌ها", callback_data: "انتخاب آیدی‌ها" }],
-      ],
-    },
+        [
+          { text: "انتخاب آیدی‌ها", callback_data: "انتخاب آیدی‌ها" }
+        ]
+      ]
+    }
   };
 
   bot.sendMessage(chatId, "سلام! لطفاً یک گزینه انتخاب کنید:", options);
 });
 
 // هندلر برای انتخاب دکمه
-bot.on("callback_query", (query) => {
+bot.on('callback_query', (query) => {
   const chatId = query.message.chat.id;
   const selectedOption = query.data;
 
   if (mappings[selectedOption]) {
     const { source_id, dest_id } = mappings[selectedOption];
     userMappings[chatId] = { source_id, dest_id };
+
     bot.sendMessage(chatId, `آیدی مبدا: ${source_id} با موفقیت ذخیره شد.`);
     bot.sendMessage(chatId, `آیدی مقصد: ${dest_id} با موفقیت ذخیره شد.`);
-    bot.sendMessage(chatId, "حالا پیام‌های خود را ارسال کنید.");
-  }
-
-  if (selectedOption === "انتخاب آیدی‌ها") {
-    bot.sendMessage(chatId, "لطفاً آیدی مبدا را وارد کنید:");
-    bot.once("message", (msg) => {
-      const source_id = msg.text;
-      bot.sendMessage(chatId, "حالا لطفاً آیدی مقصد را وارد کنید:");
-      bot.once("message", (msg) => {
-        const dest_id = msg.text;
-        userMappings[chatId] = { source_id, dest_id };
-        bot.sendMessage(chatId, `آیدی‌ها ذخیره شدند. ارسال پیام‌ها را شروع کنید.`);
-      });
-    });
+    bot.sendMessage(chatId, "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد.");
   }
 });
 
-// تابع استخراج عدد از کپشن
-function extractNumber(caption) {
-  const match = caption ? caption.match(/\d+/) : null;
-  return match ? parseInt(match[0], 10) : Infinity; // اگر عددی نبود، مقدار بالا برای انتهای لیست.
-}
-
-// ذخیره و مرتب‌سازی پیام‌های تصویری
-bot.on(["photo", "video"], (msg) => {
+// پردازش پیام‌های متنی
+bot.on('message', (msg) => {
   const chatId = msg.chat.id;
-  const caption = msg.caption || "";
 
-  if (!pendingMessages[chatId]) pendingMessages[chatId] = [];
+  if (msg.text && msg.text !== '/start') {
+    let messageText = msg.text;
 
-  const messageData = {
-    type: msg.photo ? "photo" : "video",
-    fileId: msg.photo ? msg.photo[0].file_id : msg.video.file_id,
-    caption,
-  };
+    if (userMappings[chatId]) {
+      const { source_id, dest_id } = userMappings[chatId];
+      if (messageText.includes(source_id)) {
+        messageText = messageText.replace(source_id, dest_id);
+      }
 
-  pendingMessages[chatId].push(messageData);
-
-  // مرتب‌سازی پیام‌ها
-  pendingMessages[chatId].sort((a, b) => extractNumber(a.caption) - extractNumber(b.caption));
+      addToQueue(() => bot.sendMessage(chatId, messageText));
+    }
+  }
 });
 
-// ارسال پیام‌ها
-bot.onText(/\/send/, (msg) => {
+// پردازش تصاویر
+bot.on('photo', (msg) => {
   const chatId = msg.chat.id;
+  let caption = msg.caption;
 
-  if (pendingMessages[chatId] && pendingMessages[chatId].length > 0) {
-    const { source_id, dest_id } = userMappings[chatId] || {};
-    pendingMessages[chatId].forEach((message) => {
-      let caption = message.caption;
-      if (source_id && dest_id && caption.includes(source_id)) {
-        caption = caption.replace(source_id, dest_id);
-      }
-
-      if (message.type === "photo") {
-        bot.sendPhoto(chatId, message.fileId, { caption });
-      } else if (message.type === "video") {
-        bot.sendVideo(chatId, message.fileId, { caption });
-      }
-    });
-
-    // بعد از ارسال پیام‌ها، لیست را خالی می‌کنیم
-    pendingMessages[chatId] = [];
-  } else {
-    bot.sendMessage(chatId, "هیچ پیامی برای ارسال موجود نیست.");
+  if (userMappings[chatId]) {
+    const { source_id, dest_id } = userMappings[chatId];
+    if (caption && caption.includes(source_id)) {
+      caption = caption.replace(source_id, dest_id);
+    }
   }
+
+  addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
+});
+
+// پردازش ویدیو
+bot.on('video', (msg) => {
+  const chatId = msg.chat.id;
+  let caption = msg.caption;
+
+  if (userMappings[chatId]) {
+    const { source_id, dest_id } = userMappings[chatId];
+    if (caption && caption.includes(source_id)) {
+      caption = caption.replace(source_id, dest_id);
+    }
+  }
+
+  addToQueue(() => bot.sendVideo(chatId, msg.video.file_id, { caption }));
 });
