@@ -16,8 +16,9 @@ const mappings = {
   }
 };
 
-// ذخیره آیدی‌ها برای کاربران
+// ذخیره آیدی‌ها و لینک کانال‌ها برای کاربران
 const userMappings = {};
+const userChannel = {}; // ذخیره لینک کانال خصوصی
 
 // صف ارسال پیام
 const messageQueue = [];
@@ -58,6 +59,9 @@ bot.onText(/\/start/, (msg) => {
         [
           { text: "انتخاب آیدی‌ها" },
           { text: "تغییر لینک دانلود" }
+        ],
+        [
+          { text: "تنظیم کانال" }
         ]
       ],
       resize_keyboard: true, // صفحه کلید را تنظیم می‌کند تا مناسب با اندازه صفحه باشد
@@ -92,6 +96,10 @@ bot.on('message', (msg) => {
     bot.sendMessage(chatId, "لطفاً لینک دانلود جدید را ارسال کنید.");
     // برای گرفتن لینک دانلود جدید و تغییر آن در کپشن در اینجا عملیات لازم را اضافه کنید.
   }
+
+  if (msg.text === "تنظیم کانال") {
+    bot.sendMessage(chatId, "لطفاً لینک دعوت کانال خصوصی خود را وارد کنید (با t.me/ شروع می‌شود).");
+  }
 });
 
 // پردازش پیام‌های متنی
@@ -101,6 +109,16 @@ bot.on('message', (msg) => {
   if (msg.text && msg.text !== '/start') {
     let messageText = msg.text;
 
+    // ذخیره کانال برای ارسال به آن
+    if (msg.text.startsWith('https://t.me/')) {
+      const channelLink = msg.text;
+      userChannel[chatId] = channelLink; // ذخیره لینک دعوت کانال برای ارسال به آن
+
+      bot.sendMessage(chatId, `لینک دعوت کانال ${channelLink} با موفقیت ذخیره شد.`);
+      bot.sendMessage(chatId, `لطفاً توجه داشته باشید که برای ارسال پیام به این کانال، ربات باید به عنوان ادمین در کانال شما قرار بگیرد.`);
+      return;
+    }
+
     if (userMappings[chatId]) {
       const { source_id, dest_id } = userMappings[chatId];
       if (messageText.includes(source_id)) {
@@ -108,6 +126,12 @@ bot.on('message', (msg) => {
       }
 
       addToQueue(() => bot.sendMessage(chatId, messageText));
+    }
+
+    // ارسال پیام به کانال خصوصی
+    if (userChannel[chatId]) {
+      const channelLink = userChannel[chatId];
+      bot.sendMessage(channelLink, msg.text); // ارسال پیام به کانال خصوصی
     }
   }
 });
@@ -125,6 +149,12 @@ bot.on('photo', (msg) => {
   }
 
   addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
+
+  // ارسال تصویر به کانال خصوصی
+  if (userChannel[chatId]) {
+    const channelLink = userChannel[chatId];
+    bot.sendPhoto(channelLink, msg.photo[0].file_id, { caption });
+  }
 });
 
 // پردازش ویدیو
@@ -140,4 +170,10 @@ bot.on('video', (msg) => {
   }
 
   addToQueue(() => bot.sendVideo(chatId, msg.video.file_id, { caption }));
+
+  // ارسال ویدیو به کانال خصوصی
+  if (userChannel[chatId]) {
+    const channelLink = userChannel[chatId];
+    bot.sendVideo(channelLink, msg.video.file_id, { caption });
+  }
 });
