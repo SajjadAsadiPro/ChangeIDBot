@@ -58,6 +58,9 @@ bot.onText(/\/start/, (msg) => {
         [
           { text: "انتخاب آیدی‌ها", callback_data: "انتخاب آیدی‌ها" },
           { text: "تغییر کپشن لینک دانلود", callback_data: "تغییر کپشن" }
+        ],
+        [
+          { text: "ریستارت ربات", callback_data: "ریستارت" } // دکمه جدید برای ریستارت ربات
         ]
       ]
     }
@@ -87,6 +90,18 @@ bot.on('callback_query', (query) => {
     bot.sendMessage(chatId, `آیدی مقصد: ${dest_id} با موفقیت ذخیره شد.`);
     bot.sendMessage(chatId, "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد.");
   }
+
+  // هندلر برای دکمه انتخاب آیدی‌ها
+  if (selectedOption === "انتخاب آیدی‌ها") {
+    bot.sendMessage(chatId, "لطفاً آیدی مبدا را ارسال کنید.");
+    userMappings[chatId] = { step: "source_id" }; // مرحله اول (دریافت آیدی مبدا)
+  }
+
+  // هندلر برای دکمه ریستارت
+  if (selectedOption === "ریستارت") {
+    delete userMappings[chatId]; // پاک کردن اطلاعات کاربر برای ریستارت ربات
+    bot.sendMessage(chatId, "ربات با موفقیت ریستارت شد.");
+  }
 });
 
 // پردازش پیام‌های متنی
@@ -97,19 +112,38 @@ bot.on('message', (msg) => {
     let messageText = msg.text;
 
     if (userMappings[chatId]) {
-      const { source_id, dest_id, changeCaption } = userMappings[chatId];
-      if (messageText.includes(source_id)) {
-        messageText = messageText.replace(source_id, dest_id);
+      const { step, source_id, dest_id, changeCaption } = userMappings[chatId];
+
+      if (step === "source_id") {
+        // مرحله اول: دریافت آیدی مبدا
+        userMappings[chatId].source_id = messageText;
+        userMappings[chatId].step = "dest_id"; // مرحله بعدی: دریافت آیدی مقصد
+        bot.sendMessage(chatId, `آیدی مبدا "${messageText}" ذخیره شد. حالا لطفاً آیدی مقصد را ارسال کنید.`);
+        return;
       }
 
-      // اگر دکمه تغییر کپشن فشرده شده باشد، تغییر لینک دانلود را اعمال می‌کنیم
-      if (changeCaption && messageText.includes('➰ لینک دانلود:')) {
-        // فقط بخش لینک دانلود را تغییر داده و بقیه متن را پاک می‌کنیم
-        messageText = messageText.split('➰ لینک دانلود:')[0] + '❤️@GlobCinema\n❤️@GlobCinemaNews';
-        delete userMappings[chatId].changeCaption;  // غیرفعال کردن حالت تغییر کپشن
+      if (step === "dest_id") {
+        // مرحله دوم: دریافت آیدی مقصد
+        userMappings[chatId].dest_id = messageText;
+        delete userMappings[chatId].step; // اتمام پروسه انتخاب آیدی‌ها
+        bot.sendMessage(chatId, `آیدی مقصد "${messageText}" ذخیره شد. حالا هر پیامی که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد.`);
+        return;
       }
 
-      addToQueue(() => bot.sendMessage(chatId, messageText));
+      if (source_id && dest_id) {
+        if (messageText.includes(source_id)) {
+          messageText = messageText.replace(source_id, dest_id);
+        }
+
+        // اگر دکمه تغییر کپشن فشرده شده باشد، تغییر لینک دانلود را اعمال می‌کنیم
+        if (changeCaption && messageText.includes('➰ لینک دانلود:')) {
+          // فقط بخش لینک دانلود را تغییر داده و بقیه متن را پاک می‌کنیم
+          messageText = messageText.split('➰ لینک دانلود:')[0] + '❤️@GlobCinema\n❤️@GlobCinemaNews';
+          delete userMappings[chatId].changeCaption;  // غیرفعال کردن حالت تغییر کپشن
+        }
+
+        addToQueue(() => bot.sendMessage(chatId, messageText));
+      }
     }
   }
 });
