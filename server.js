@@ -16,9 +16,8 @@ const mappings = {
   }
 };
 
-// ذخیره آیدی‌ها و لینک کانال‌ها برای کاربران
+// ذخیره آیدی‌ها برای کاربران
 const userMappings = {};
-const userChannel = {}; // ذخیره لینک کانال خصوصی
 
 // صف ارسال پیام
 const messageQueue = [];
@@ -51,21 +50,16 @@ bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   const options = {
     reply_markup: {
-      keyboard: [
+      inline_keyboard: [
         [
-          { text: "ایرانی" },
-          { text: "خارجی" }
+          { text: "ایرانی", callback_data: "ایرانی" },
+          { text: "خارجی", callback_data: "خارجی" }
         ],
         [
-          { text: "انتخاب آیدی‌ها" },
-          { text: "تغییر لینک دانلود" }
-        ],
-        [
-          { text: "تنظیم کانال" }
+          { text: "انتخاب آیدی‌ها", callback_data: "انتخاب آیدی‌ها" },
+          { text: "تغییر کپشن لینک دانلود", callback_data: "تغییر کپشن" }
         ]
-      ],
-      resize_keyboard: true, // صفحه کلید را تنظیم می‌کند تا مناسب با اندازه صفحه باشد
-      one_time_keyboard: true // صفحه کلید بعد از انتخاب گزینه پنهان می‌شود
+      ]
     }
   };
 
@@ -73,32 +67,25 @@ bot.onText(/\/start/, (msg) => {
 });
 
 // هندلر برای انتخاب دکمه
-bot.on('message', (msg) => {
-  const chatId = msg.chat.id;
+bot.on('callback_query', (query) => {
+  const chatId = query.message.chat.id;
+  const selectedOption = query.data;
 
-  if (msg.text === "ایرانی" || msg.text === "خارجی") {
-    const selectedOption = msg.text;
-    if (mappings[selectedOption]) {
-      const { source_id, dest_id } = mappings[selectedOption];
-      userMappings[chatId] = { source_id, dest_id };
-
-      bot.sendMessage(chatId, `آیدی مبدا: ${source_id} با موفقیت ذخیره شد.`);
-      bot.sendMessage(chatId, `آیدی مقصد: ${dest_id} با موفقیت ذخیره شد.`);
-      bot.sendMessage(chatId, "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد.");
-    }
+  if (selectedOption === "تغییر کپشن") {
+    // فعال کردن حالت تغییر کپشن
+    bot.sendMessage(chatId, "حالت تغییر کپشن لینک دانلود فعال شد. لینک دانلود به شرح زیر تغییر خواهد کرد:\n❤️@GlobCinema\n❤️@GlobCinemaNews");
+    
+    // ذخیره وضعیت تغییر کپشن برای استفاده بعدی
+    userMappings[chatId] = { changeCaption: true };
   }
 
-  if (msg.text === "انتخاب آیدی‌ها") {
-    bot.sendMessage(chatId, "لطفاً انتخاب کنید: ایرانی یا خارجی.");
-  }
+  if (mappings[selectedOption]) {
+    const { source_id, dest_id } = mappings[selectedOption];
+    userMappings[chatId] = { source_id, dest_id };
 
-  if (msg.text === "تغییر لینک دانلود") {
-    bot.sendMessage(chatId, "لطفاً لینک دانلود جدید را ارسال کنید.");
-    // برای گرفتن لینک دانلود جدید و تغییر آن در کپشن در اینجا عملیات لازم را اضافه کنید.
-  }
-
-  if (msg.text === "تنظیم کانال") {
-    bot.sendMessage(chatId, "لطفاً لینک دعوت کانال خصوصی خود را وارد کنید (با t.me/ شروع می‌شود).");
+    bot.sendMessage(chatId, `آیدی مبدا: ${source_id} با موفقیت ذخیره شد.`);
+    bot.sendMessage(chatId, `آیدی مقصد: ${dest_id} با موفقیت ذخیره شد.`);
+    bot.sendMessage(chatId, "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد.");
   }
 });
 
@@ -109,29 +96,20 @@ bot.on('message', (msg) => {
   if (msg.text && msg.text !== '/start') {
     let messageText = msg.text;
 
-    // ذخیره کانال برای ارسال به آن
-    if (msg.text.startsWith('https://t.me/')) {
-      const channelLink = msg.text;
-      userChannel[chatId] = channelLink; // ذخیره لینک دعوت کانال برای ارسال به آن
-
-      bot.sendMessage(chatId, `لینک دعوت کانال ${channelLink} با موفقیت ذخیره شد.`);
-      bot.sendMessage(chatId, `لطفاً توجه داشته باشید که برای ارسال پیام به این کانال، ربات باید به عنوان ادمین در کانال شما قرار بگیرد.`);
-      return;
-    }
-
     if (userMappings[chatId]) {
-      const { source_id, dest_id } = userMappings[chatId];
+      const { source_id, dest_id, changeCaption } = userMappings[chatId];
       if (messageText.includes(source_id)) {
         messageText = messageText.replace(source_id, dest_id);
       }
 
-      addToQueue(() => bot.sendMessage(chatId, messageText));
-    }
+      // اگر دکمه تغییر کپشن فشرده شده باشد، تغییر لینک دانلود را اعمال می‌کنیم
+      if (changeCaption && messageText.includes('➰ لینک دانلود:')) {
+        // فقط بخش لینک دانلود را تغییر داده و بقیه متن را پاک می‌کنیم
+        messageText = messageText.split('➰ لینک دانلود:')[0] + '❤️@GlobCinema\n❤️@GlobCinemaNews';
+        delete userMappings[chatId].changeCaption;  // غیرفعال کردن حالت تغییر کپشن
+      }
 
-    // ارسال پیام به کانال خصوصی
-    if (userChannel[chatId]) {
-      const channelLink = userChannel[chatId];
-      bot.sendMessage(channelLink, msg.text); // ارسال پیام به کانال خصوصی
+      addToQueue(() => bot.sendMessage(chatId, messageText));
     }
   }
 });
@@ -142,19 +120,20 @@ bot.on('photo', (msg) => {
   let caption = msg.caption;
 
   if (userMappings[chatId]) {
-    const { source_id, dest_id } = userMappings[chatId];
+    const { source_id, dest_id, changeCaption } = userMappings[chatId];
     if (caption && caption.includes(source_id)) {
       caption = caption.replace(source_id, dest_id);
+    }
+
+    // اگر دکمه تغییر کپشن فشرده شده باشد، تغییر لینک دانلود را اعمال می‌کنیم
+    if (changeCaption && caption && caption.includes('➰ لینک دانلود:')) {
+      // فقط بخش لینک دانلود را تغییر داده و بقیه متن را پاک می‌کنیم
+      caption = caption.split('➰ لینک دانلود:')[0] + '❤️@GlobCinema\n❤️@GlobCinemaNews';
+      delete userMappings[chatId].changeCaption;  // غیرفعال کردن حالت تغییر کپشن
     }
   }
 
   addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
-
-  // ارسال تصویر به کانال خصوصی
-  if (userChannel[chatId]) {
-    const channelLink = userChannel[chatId];
-    bot.sendPhoto(channelLink, msg.photo[0].file_id, { caption });
-  }
 });
 
 // پردازش ویدیو
@@ -163,17 +142,18 @@ bot.on('video', (msg) => {
   let caption = msg.caption;
 
   if (userMappings[chatId]) {
-    const { source_id, dest_id } = userMappings[chatId];
+    const { source_id, dest_id, changeCaption } = userMappings[chatId];
     if (caption && caption.includes(source_id)) {
       caption = caption.replace(source_id, dest_id);
+    }
+
+    // اگر دکمه تغییر کپشن فشرده شده باشد، تغییر لینک دانلود را اعمال می‌کنیم
+    if (changeCaption && caption && caption.includes('➰ لینک دانلود:')) {
+      // فقط بخش لینک دانلود را تغییر داده و بقیه متن را پاک می‌کنیم
+      caption = caption.split('➰ لینک دانلود:')[0] + '❤️@GlobCinema\n❤️@GlobCinemaNews';
+      delete userMappings[chatId].changeCaption;  // غیرفعال کردن حالت تغییر کپشن
     }
   }
 
   addToQueue(() => bot.sendVideo(chatId, msg.video.file_id, { caption }));
-
-  // ارسال ویدیو به کانال خصوصی
-  if (userChannel[chatId]) {
-    const channelLink = userChannel[chatId];
-    bot.sendVideo(channelLink, msg.video.file_id, { caption });
-  }
 });
