@@ -4,8 +4,23 @@ const TelegramBot = require("node-telegram-bot-api");
 const token = "7300821157:AAFpqNZQqznNqf74O-gVDDhQHCdgzv4X8pY";
 const bot = new TelegramBot(token, { polling: true });
 
+// دکمه‌ها و آیدی‌های مبدا و مقصد
+const mappings = {
+  ایرانی: {
+    source_id: "@MrMoovie",
+    dest_id: "@FILmoseriyalerooz_bot",
+  },
+  خارجی: {
+    source_id: "@towfilm",
+    dest_id: "@GlobCinema",
+  },
+};
+
 // ذخیره آیدی‌ها برای کاربران
 const userMappings = {};
+
+// ذخیره پیام‌ها
+const pendingMessages = {};
 
 // فرمان /start
 bot.onText(/\/start/, (msg) => {
@@ -30,16 +45,15 @@ bot.on("callback_query", (query) => {
   const chatId = query.message.chat.id;
   const selectedOption = query.data;
 
-  if (selectedOption === "ایرانی") {
-    userMappings[chatId] = {
-      source_id: "@MrMoovie",
-      dest_id: "@FILmoseriyalerooz_bot",
-    };
-    bot.sendMessage(chatId, "آیدی‌های ایرانی با موفقیت تنظیم شدند!");
-  } else if (selectedOption === "خارجی") {
-    userMappings[chatId] = { source_id: "@towfilm", dest_id: "@GlobCinema" };
-    bot.sendMessage(chatId, "آیدی‌های خارجی با موفقیت تنظیم شدند!");
-  } else if (selectedOption === "انتخاب آیدی‌ها") {
+  if (mappings[selectedOption]) {
+    const { source_id, dest_id } = mappings[selectedOption];
+    userMappings[chatId] = { source_id, dest_id };
+    bot.sendMessage(chatId, `آیدی مبدا: ${source_id} با موفقیت ذخیره شد.`);
+    bot.sendMessage(chatId, `آیدی مقصد: ${dest_id} با موفقیت ذخیره شد.`);
+    bot.sendMessage(chatId, "حالا پیام‌های خود را ارسال کنید.");
+  }
+
+  if (selectedOption === "انتخاب آیدی‌ها") {
     bot.sendMessage(chatId, "لطفاً آیدی مبدا را وارد کنید:");
     bot.once("message", (msg) => {
       const source_id = msg.text;
@@ -47,72 +61,59 @@ bot.on("callback_query", (query) => {
       bot.once("message", (msg) => {
         const dest_id = msg.text;
         userMappings[chatId] = { source_id, dest_id };
-        bot.sendMessage(
-          chatId,
-          `آیدی‌ها ذخیره شدند:\nمبدا: ${source_id}\nمقصد: ${dest_id}`
-        );
+        bot.sendMessage(chatId, `آیدی‌ها ذخیره شدند. ارسال پیام‌ها را شروع کنید.`);
       });
     });
   }
 });
 
-// ارسال فایل با تأخیر
-function sendWithDelay(chatId, fileId, caption, type, delay) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      if (type === "photo") {
-        bot
-          .sendPhoto(chatId, fileId, { caption })
-          .then(() => resolve())
-          .catch(() => resolve());
-      } else if (type === "video") {
-        bot
-          .sendVideo(chatId, fileId, { caption })
-          .then(() => resolve())
-          .catch(() => resolve());
-      }
-    }, delay);
-  });
+// تابع استخراج عدد از کپشن
+function extractNumber(caption) {
+  const match = caption ? caption.match(/\d+/) : null;
+  return match ? parseInt(match[0], 10) : Infinity; // اگر عددی نبود، مقدار بالا برای انتهای لیست.
 }
 
-// پردازش پیام‌های دریافتی
-bot.on("message", async (msg) => {
+// ذخیره و مرتب‌سازی پیام‌های تصویری
+bot.on(["photo", "video"], (msg) => {
   const chatId = msg.chat.id;
+  const caption = msg.caption || "";
 
-  // پردازش فایل‌های تصویری
-  if (msg.photo) {
-    let caption = msg.caption || "";
-    const updatedCaption = modifyCaption(caption, chatId); // تغییر کپشن
-    await sendWithDelay(
-      chatId,
-      msg.photo[msg.photo.length - 1].file_id,
-      updatedCaption,
-      "photo",
-      1000
-    );
-  }
+  if (!pendingMessages[chatId]) pendingMessages[chatId] = [];
 
-  // پردازش فایل‌های ویدئویی
-  if (msg.video) {
-    let caption = msg.caption || "";
-    const updatedCaption = modifyCaption(caption, chatId); // تغییر کپشن
-    await sendWithDelay(
-      chatId,
-      msg.video.file_id,
-      updatedCaption,
-      "video",
-      1000
-    );
-  }
+  const messageData = {
+    type: msg.photo ? "photo" : "video",
+    fileId: msg.photo ? msg.photo[0].file_id : msg.video.file_id,
+    caption,
+  };
+
+  pendingMessages[chatId].push(messageData);
+
+  // مرتب‌سازی پیام‌ها
+  pendingMessages[chatId].sort((a, b) => extractNumber(a.caption) - extractNumber(b.caption));
 });
 
-// تابع تغییر کپشن
-function modifyCaption(caption, chatId) {
-  const mapping = userMappings[chatId];
-  if (!mapping) return caption;
+// ارسال پیام‌ها
+bot.onText(/\/send/, (msg) => {
+  const chatId = msg.chat.id;
 
-  const { source_id, dest_id } = mapping;
-  return caption.includes(source_id)
-    ? caption.replace(source_id, dest_id)
-    : caption;
-}
+  if (pendingMessages[chatId] && pendingMessages[chatId].length > 0) {
+    const { source_id, dest_id } = userMappings[chatId] || {};
+    pendingMessages[chatId].forEach((message) => {
+      let caption = message.caption;
+      if (source_id && dest_id && caption.includes(source_id)) {
+        caption = caption.replace(source_id, dest_id);
+      }
+
+      if (message.type === "photo") {
+        bot.sendPhoto(chatId, message.fileId, { caption });
+      } else if (message.type === "video") {
+        bot.sendVideo(chatId, message.fileId, { caption });
+      }
+    });
+
+    // بعد از ارسال پیام‌ها، لیست را خالی می‌کنیم
+    pendingMessages[chatId] = [];
+  } else {
+    bot.sendMessage(chatId, "هیچ پیامی برای ارسال موجود نیست.");
+  }
+});
