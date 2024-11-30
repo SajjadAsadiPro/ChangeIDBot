@@ -56,7 +56,8 @@ bot.onText(/\/start/, (msg) => {
           { text: "خارجی", callback_data: "خارجی" }
         ],
         [
-          { text: "انتخاب آیدی‌ها", callback_data: "انتخاب آیدی‌ها" }
+          { text: "انتخاب آیدی‌ها", callback_data: "انتخاب آیدی‌ها" },
+          { text: "تغییر کپشن لینک دانلود", callback_data: "تغییر کپشن" }
         ]
       ]
     }
@@ -69,6 +70,14 @@ bot.onText(/\/start/, (msg) => {
 bot.on('callback_query', (query) => {
   const chatId = query.message.chat.id;
   const selectedOption = query.data;
+
+  if (selectedOption === "تغییر کپشن") {
+    // فعال کردن حالت تغییر کپشن
+    bot.sendMessage(chatId, "حالت تغییر کپشن لینک دانلود فعال شد. لینک دانلود به شرح زیر تغییر خواهد کرد:\n❤️@GlobCinema\n❤️@GlobCinemaNews");
+    
+    // ذخیره وضعیت تغییر کپشن برای استفاده بعدی
+    userMappings[chatId] = { changeCaption: true };
+  }
 
   if (mappings[selectedOption]) {
     const { source_id, dest_id } = mappings[selectedOption];
@@ -88,9 +97,15 @@ bot.on('message', (msg) => {
     let messageText = msg.text;
 
     if (userMappings[chatId]) {
-      const { source_id, dest_id } = userMappings[chatId];
+      const { source_id, dest_id, changeCaption } = userMappings[chatId];
       if (messageText.includes(source_id)) {
         messageText = messageText.replace(source_id, dest_id);
+      }
+
+      // اگر دکمه تغییر کپشن فشرده شده باشد، تغییر لینک دانلود را اعمال می‌کنیم
+      if (changeCaption && messageText.includes('➰ لینک دانلود:')) {
+        messageText = messageText.replace(/➰ لینک دانلود:.*/, '❤️@GlobCinema\n❤️@GlobCinemaNews');
+        delete userMappings[chatId].changeCaption;  // غیرفعال کردن حالت تغییر کپشن
       }
 
       addToQueue(() => bot.sendMessage(chatId, messageText));
@@ -104,9 +119,15 @@ bot.on('photo', (msg) => {
   let caption = msg.caption;
 
   if (userMappings[chatId]) {
-    const { source_id, dest_id } = userMappings[chatId];
+    const { source_id, dest_id, changeCaption } = userMappings[chatId];
     if (caption && caption.includes(source_id)) {
       caption = caption.replace(source_id, dest_id);
+    }
+
+    // اگر دکمه تغییر کپشن فشرده شده باشد، تغییر لینک دانلود را اعمال می‌کنیم
+    if (changeCaption && caption && caption.includes('➰ لینک دانلود:')) {
+      caption = caption.replace(/➰ لینک دانلود:.*/, '❤️@GlobCinema\n❤️@GlobCinemaNews');
+      delete userMappings[chatId].changeCaption;  // غیرفعال کردن حالت تغییر کپشن
     }
   }
 
@@ -119,9 +140,15 @@ bot.on('video', (msg) => {
   let caption = msg.caption;
 
   if (userMappings[chatId]) {
-    const { source_id, dest_id } = userMappings[chatId];
+    const { source_id, dest_id, changeCaption } = userMappings[chatId];
     if (caption && caption.includes(source_id)) {
       caption = caption.replace(source_id, dest_id);
+    }
+
+    // اگر دکمه تغییر کپشن فشرده شده باشد، تغییر لینک دانلود را اعمال می‌کنیم
+    if (changeCaption && caption && caption.includes('➰ لینک دانلود:')) {
+      caption = caption.replace(/➰ لینک دانلود:.*/, '❤️@GlobCinema\n❤️@GlobCinemaNews');
+      delete userMappings[chatId].changeCaption;  // غیرفعال کردن حالت تغییر کپشن
     }
   }
 
