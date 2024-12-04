@@ -13,6 +13,9 @@ const mappings = {
   "خارجی": {
     source_id: "@towfilm",
     dest_id: "@GlobCinema"
+  },
+  "ترکیبی": {
+    dest_id: "@GlobCinema"
   }
 };
 
@@ -53,7 +56,8 @@ bot.onText(/\/start/, (msg) => {
       inline_keyboard: [
         [
           { text: "ایرانی", callback_data: "ایرانی" },
-          { text: "خارجی", callback_data: "خارجی" }
+          { text: "خارجی", callback_data: "خارجی" },
+          { text: "ترکیبی", callback_data: "ترکیبی" }
         ],
         [
           { text: "ریستارت ربات", callback_data: "ریستارت" }
@@ -74,45 +78,51 @@ bot.on('callback_query', (query) => {
     const { source_id, dest_id } = mappings[selectedOption];
     userMappings[chatId] = { source_id, dest_id };
 
-    bot.sendMessage(chatId, `آیدی مبدا: ${source_id} با موفقیت ذخیره شد.`);
-    bot.sendMessage(chatId, `آیدی مقصد: ${dest_id} با موفقیت ذخیره شد.`);
-    bot.sendMessage(chatId, "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی مبدا با آیدی مقصد جایگزین خواهد شد.");
+    bot.sendMessage(chatId, `تنظیمات ${selectedOption} با موفقیت ذخیره شد.`);
+    bot.sendMessage(chatId, "حالا هر پیام یا رسانه‌ای که ارسال کنید، آیدی‌ها تغییر خواهند کرد.");
   }
 
-  // هندلر برای دکمه ریستارت
   if (selectedOption === "ریستارت") {
-    delete userMappings[chatId]; // پاک کردن اطلاعات کاربر برای ریستارت ربات
+    delete userMappings[chatId];
     bot.sendMessage(chatId, "ربات با موفقیت ریستارت شد.");
   }
 });
 
+// جایگزینی آیدی‌ها
+const replaceMentions = (text, dest_id) => {
+  return text.replace(/@\w+/g, dest_id);
+};
+
 // پردازش تصاویر
 bot.on('photo', (msg) => {
   const chatId = msg.chat.id;
-  let caption = msg.caption;
+  const userMapping = userMappings[chatId];
 
-  if (caption && caption.includes('➰ لینک دانلود:')) {
-    // تغییر کپشن لینک دانلود
-    caption = caption.split('➰ لینک دانلود:')[0] + '❤️@GlobCinema\n❤️@GlobCinemaNews';
+  if (userMapping) {
+    const { dest_id } = userMapping;
+    let caption = msg.caption || "";
+
+    // جایگزینی آیدی‌ها
+    caption = replaceMentions(caption, dest_id);
+
+    addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
   }
-
-  addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
 });
 
 // پردازش ویدیو
 bot.on('video', (msg) => {
   const chatId = msg.chat.id;
-  let caption = msg.caption;
+  const userMapping = userMappings[chatId];
 
-  if (userMappings[chatId]) {
-    const { source_id, dest_id } = userMappings[chatId];
-    if (caption && caption.includes(source_id)) {
-      // جایگزینی آیدی مبدا با آیدی مقصد
-      caption = caption.replace(source_id, dest_id);
-    }
+  if (userMapping) {
+    const { dest_id } = userMapping;
+    let caption = msg.caption || "";
+
+    // جایگزینی آیدی‌ها
+    caption = replaceMentions(caption, dest_id);
+
+    addToQueue(() => bot.sendVideo(chatId, msg.video.file_id, { caption }));
   }
-
-  addToQueue(() => bot.sendVideo(chatId, msg.video.file_id, { caption }));
 });
 
 // پردازش پیام‌های متنی
@@ -122,13 +132,12 @@ bot.on('message', (msg) => {
   if (msg.text && msg.text !== '/start') {
     let messageText = msg.text;
 
-    if (userMappings[chatId]) {
-      const { source_id, dest_id } = userMappings[chatId];
+    const userMapping = userMappings[chatId];
+    if (userMapping) {
+      const { dest_id } = userMapping;
 
-      if (source_id && dest_id && messageText.includes(source_id)) {
-        // جایگزینی آیدی مبدا با آیدی مقصد
-        messageText = messageText.replace(source_id, dest_id);
-      }
+      // جایگزینی آیدی‌ها
+      messageText = replaceMentions(messageText, dest_id);
 
       addToQueue(() => bot.sendMessage(chatId, messageText));
     }
