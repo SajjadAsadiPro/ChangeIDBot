@@ -102,8 +102,13 @@ bot.on('photo', (msg) => {
     const { dest_id } = userMapping;
     let caption = msg.caption || "";
 
-    // جایگزینی آیدی‌ها
-    caption = replaceMentions(caption, dest_id);
+    // اگر کاربر "خارجی" انتخاب کرده باشد
+    if (dest_id === "@GlobCinema" && caption.includes('➰ لینک دانلود:')) {
+      caption = caption.split('➰ لینک دانلود:')[0] + '❤️@GlobCinema\n❤️@GlobCinemaNews';
+    } else {
+      // جایگزینی آیدی‌ها
+      caption = replaceMentions(caption, dest_id);
+    }
 
     addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
   }
