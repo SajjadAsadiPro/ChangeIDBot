@@ -88,46 +88,63 @@ bot.on('callback_query', (query) => {
   }
 });
 
-// جایگزینی آیدی‌ها
-const replaceMentions = (text, dest_id) => {
-  return text.replace(/@\w+/g, dest_id);
+// جایگزینی متن برای گزینه "ایرانی"
+const modifyCaptionIranian = (caption) => {
+  const splitPoint = "📥 لینک دانلود رایگان پرسرعت 📥";
+  if (caption.includes(splitPoint)) {
+    return caption.split(splitPoint)[0] + "\n@filmoseriyalerooz_bot";
+  }
+  return caption;
+};
+
+// جایگزینی متن برای گزینه "خارجی" و "ترکیبی"
+const modifyCaptionForeign = (caption) => {
+  if (caption.includes("➰ لینک دانلود:")) {
+    return caption.split("➰ لینک دانلود:")[0] + "\n❤️@GlobCinema\n❤️@GlobCinemaNews";
+  }
+  return caption;
 };
 
 // پردازش تصاویر
 bot.on('photo', (msg) => {
   const chatId = msg.chat.id;
   const userMapping = userMappings[chatId];
+  let caption = msg.caption || "";
 
   if (userMapping) {
     const { dest_id } = userMapping;
-    let caption = msg.caption || "";
 
-    // اگر کاربر "خارجی" انتخاب کرده باشد
-    if (dest_id === "@GlobCinema" && caption.includes('➰ لینک دانلود:')) {
-      caption = caption.split('➰ لینک دانلود:')[0] + '❤️@GlobCinema\n❤️@GlobCinemaNews';
-    } else {
-      // جایگزینی آیدی‌ها
-      caption = replaceMentions(caption, dest_id);
+    if (dest_id === "@FILmoseriyalerooz_bot") {
+      caption = modifyCaptionIranian(caption);
+    } else if (dest_id === "@GlobCinema") {
+      caption = modifyCaptionForeign(caption);
     }
-
-    addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
   }
+
+  addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
 });
 
 // پردازش ویدیو
 bot.on('video', (msg) => {
   const chatId = msg.chat.id;
   const userMapping = userMappings[chatId];
+  let caption = msg.caption || "";
 
   if (userMapping) {
     const { dest_id } = userMapping;
-    let caption = msg.caption || "";
 
-    // جایگزینی آیدی‌ها
-    caption = replaceMentions(caption, dest_id);
+    // تغییر آیدی برای ویدیوهای ایرانی
+    if (dest_id === "@FILmoseriyalerooz_bot" && caption.includes("@MrMoovie")) {
+      caption = caption.replace("@MrMoovie", "@FILmoseriyalerooz_bot");
+    }
 
-    addToQueue(() => bot.sendVideo(chatId, msg.video.file_id, { caption }));
+    // تغییر آیدی برای ویدیوهای خارجی و ترکیبی
+    if (dest_id === "@GlobCinema" && caption.includes("@towfilm")) {
+      caption = caption.replace("@towfilm", "@GlobCinema");
+    }
   }
+
+  addToQueue(() => bot.sendVideo(chatId, msg.video.file_id, { caption }));
 });
 
 // پردازش پیام‌های متنی
@@ -139,10 +156,11 @@ bot.on('message', (msg) => {
 
     const userMapping = userMappings[chatId];
     if (userMapping) {
-      const { dest_id } = userMapping;
+      const { source_id, dest_id } = userMapping;
 
-      // جایگزینی آیدی‌ها
-      messageText = replaceMentions(messageText, dest_id);
+      if (source_id && dest_id && messageText.includes(source_id)) {
+        messageText = messageText.replace(source_id, dest_id);
+      }
 
       addToQueue(() => bot.sendMessage(chatId, messageText));
     }
