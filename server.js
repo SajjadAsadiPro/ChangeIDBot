@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 
 // توکن ربات تلگرام
-const token = '7300821157:AAFpqNZQqznNqf74O-gVDDhQHCdgzv4X8pY';
+const token = '7796261453:AAGCRAra68yi7n5d0jKXzE3JRvaN3spW9vk';
 const bot = new TelegramBot(token, { polling: true });
 
 // دکمه‌ها و آیدی‌های مبدا و مقصد
