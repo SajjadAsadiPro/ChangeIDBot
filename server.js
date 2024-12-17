@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 
 // توکن ربات تلگرام
-const token = '7796261453:AAGCRAra68yi7n5d0jKXzE3JRvaN3spW9vk';
+const token = '7796261453:AAGCRAra68yi7n5d0jKXzE3JRvaN3spW9vk'; // توکن خود را جایگزین کنید
 const bot = new TelegramBot(token, { polling: true });
 
 // دکمه‌ها و آیدی‌های مبدا و مقصد
@@ -19,8 +19,9 @@ const mappings = {
   }
 };
 
-// ذخیره آیدی‌ها برای کاربران
+// ذخیره تنظیمات کاربران
 const userMappings = {};
+const userCaptions = {};
 
 // صف ارسال پیام
 const messageQueue = [];
@@ -84,74 +85,74 @@ bot.on('callback_query', (query) => {
 
   if (selectedOption === "ریستارت") {
     delete userMappings[chatId];
+    delete userCaptions[chatId];
     bot.sendMessage(chatId, "ربات با موفقیت ریستارت شد.");
   }
 });
 
-// جایگزینی متن برای گزینه "ایرانی"
-const modifyCaptionIranian = (caption) => {
-  const splitPoint = "📥 لینک دانلود رایگان پرسرعت 📥";
-  if (caption.includes(splitPoint)) {
-    return caption.split(splitPoint)[0] + "\n@filmoseriyalerooz_bot";
-  }
-  return caption;
-};
+// تنظیم متن دلخواه توسط کاربر
+bot.onText(/\/set_caption (.+)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const customCaption = match[1];
 
-// جایگزینی متن برای گزینه "خارجی" و "ترکیبی"
-const modifyCaptionForeign = (caption) => {
-  if (caption.includes("➰ لینک دانلود:")) {
-    return caption.split("➰ لینک دانلود:")[0] + "\n❤️@GlobCinema\n❤️@GlobCinemaNews";
-  }
-  return caption;
-};
+  userCaptions[chatId] = customCaption;
+  bot.sendMessage(chatId, "متن پیش‌فرض شما با موفقیت ذخیره شد!");
+});
 
-// پردازش تصاویر
-bot.on('photo', (msg) => {
+// پردازش رسانه‌ها (عکس، ویدیو، فایل و غیره)
+const handleMedia = (msg, mediaType) => {
   const chatId = msg.chat.id;
   const userMapping = userMappings[chatId];
+  const userCaption = userCaptions[chatId] || "";
   let caption = msg.caption || "";
 
   if (userMapping) {
-    const { dest_id } = userMapping;
+    const { source_id, dest_id } = userMapping;
 
-    if (dest_id === "@FILmoseriyalerooz_bot") {
-      caption = modifyCaptionIranian(caption);
-    } else if (dest_id === "@GlobCinema") {
-      caption = modifyCaptionForeign(caption);
+    if (source_id && caption.includes(source_id)) {
+      caption = caption.replace(source_id, dest_id);
     }
+
+    caption += `\n${userCaption}`; // افزودن متن سفارشی کاربر
   }
 
-  addToQueue(() => bot.sendPhoto(chatId, msg.photo[0].file_id, { caption }));
-});
+  const mediaOptions = { caption };
 
-// پردازش ویدیو
-bot.on('video', (msg) => {
-  const chatId = msg.chat.id;
-  const userMapping = userMappings[chatId];
-  let caption = msg.caption || "";
-
-  if (userMapping) {
-    const { dest_id } = userMapping;
-
-    // تغییر آیدی برای ویدیوهای ایرانی
-    if (dest_id === "@FILmoseriyalerooz_bot" && caption.includes("@MrMoovie")) {
-      caption = caption.replace("@MrMoovie", "@FILmoseriyalerooz_bot");
+  addToQueue(() => {
+    if (mediaType === 'photo') {
+      bot.sendPhoto(chatId, msg.photo[0].file_id, mediaOptions);
+    } else if (mediaType === 'video') {
+      bot.sendVideo(chatId, msg.video.file_id, mediaOptions);
+    } else if (mediaType === 'document') {
+      bot.sendDocument(chatId, msg.document.file_id, mediaOptions);
+    } else if (mediaType === 'audio') {
+      bot.sendAudio(chatId, msg.audio.file_id, mediaOptions);
+    } else if (mediaType === 'voice') {
+      bot.sendVoice(chatId, msg.voice.file_id, mediaOptions);
     }
+  });
+};
 
-    // تغییر آیدی برای ویدیوهای خارجی و ترکیبی
-    if (dest_id === "@GlobCinema" && caption.includes("@towfilm")) {
-      caption = caption.replace("@towfilm", "@GlobCinema");
-    }
-  }
+// پردازش عکس‌ها
+bot.on('photo', (msg) => handleMedia(msg, 'photo'));
 
-  addToQueue(() => bot.sendVideo(chatId, msg.video.file_id, { caption }));
-});
+// پردازش ویدیوها
+bot.on('video', (msg) => handleMedia(msg, 'video'));
+
+// پردازش فایل‌های اسناد
+bot.on('document', (msg) => handleMedia(msg, 'document'));
+
+// پردازش فایل‌های صوتی
+bot.on('audio', (msg) => handleMedia(msg, 'audio'));
+
+// پردازش پیام‌های صوتی
+bot.on('voice', (msg) => handleMedia(msg, 'voice'));
 
 // پردازش پیام‌های متنی
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
 
-  if (msg.text && msg.text !== '/start') {
+  if (msg.text && !msg.text.startsWith('/')) {
     let messageText = msg.text;
 
     const userMapping = userMappings[chatId];
